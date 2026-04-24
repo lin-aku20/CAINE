@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Secrets and Local configs
+.env
+config/local_config.yaml
+
+# Logs
+logs/
+*.log
+
+# Caine Specific
+memory/
+*.db
+models/vosk/
+models/wakeword/
+assets/voices/
+caine_start.log
+
+# Openclaw Agent
+.openclaw/
+.openclaw-workspace/
+
+# OS generated files
+.DS_Store
+Thumbs.db

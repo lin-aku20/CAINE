@@ -1,0 +1,13 @@
+requests>=2.32.0
+PyYAML>=6.0.2
+psutil>=7.0.0
+pyttsx3>=2.98
+pyautogui>=0.9.54
+sounddevice>=0.5.2
+vosk>=0.3.45
+openwakeword>=0.6.0
+opencv-python>=4.10.0
+pytesseract>=0.3.10
+Pillow>=11.0.0
+SpeechRecognition>=3.10.4
+piper-tts>=1.4.1

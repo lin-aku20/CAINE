@@ -1,0 +1,189 @@
+personality_file: personality/caine.txt
+
+ollama:
+  base_url: http://127.0.0.1:11434
+  primary_model: caine:latest
+  fallback_model: qwen2.5:7b
+  timeout_seconds: 120
+
+memory:
+  conversation_limit: 12
+  long_term_file: memory/caine_memory.db
+  legacy_json_file: memory/long_term_memory.json
+  max_context_items: 5
+
+voice:
+  enabled: true
+  wake_word: hey caine
+  stt_provider: vosk
+  tts_provider: pyttsx3
+  vosk_model_path: models/vosk
+  wakeword_model_path: models/wakeword
+  sample_rate: 16000
+  tts_rate: 185
+  wake_chunk_seconds: 1.8
+  command_capture_seconds: 3.5
+  post_speech_cooldown_seconds: 1.2
+  wake_variants:
+    - hey caine
+    - hey kane
+    - ok caine
+    - caine
+
+actions:
+  enabled: true
+  permission_mode: admin
+  workspace_root: .
+  allowed_apps:
+    notepad: notepad.exe
+    bloc de notas: notepad.exe
+    calculator: calc.exe
+    calculadora: calc.exe
+    explorer: explorer.exe
+    explorador: explorer.exe
+    paint: mspaint.exe
+    terminal: wt.exe
+    cmd: cmd.exe
+    powershell: powershell.exe
+    taskmgr: taskmgr.exe
+    administrador de tareas: taskmgr.exe
+    snippingtool: SnippingTool.exe
+    recortes: SnippingTool.exe
+    settings: "ms-settings:"
+    configuracion: "ms-settings:"
+    whatsapp: https://web.whatsapp.com
+    "whatsapp web": https://web.whatsapp.com
+    "whatsapp app": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
+    "whatsapp escritorio": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
+    "whatsapp desktop": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
+    "whatsapp nativo": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
+    discord: discord.exe
+    steam: steam.exe
+    chrome: chrome.exe
+    brave: brave.exe
+  allowed_folders:
+    desktop: C:/Users/melin/Desktop
+    escritorio: C:/Users/melin/Desktop
+    documents: C:/Users/melin/Documents
+    documentos: C:/Users/melin/Documents
+    downloads: C:/Users/melin/Downloads
+    descargas: C:/Users/melin/Downloads
+    pictures: C:/Users/melin/Pictures
+    imagenes: C:/Users/melin/Pictures
+    music: C:/Users/melin/Music
+    musica: C:/Users/melin/Music
+    videos: C:/Users/melin/Videos
+    videos personales: C:/Users/melin/Videos
+  allowed_tools:
+    diagnostico: verify_environment.py
+    "diagnóstico": verify_environment.py
+    verificar entorno: verify_environment.py
+    verificar ollama: verify_ollama.py
+    ollama: verify_ollama.py
+    caine: main.py
+  allowed_hotkeys:
+    - ctrl+shift+esc
+    - win+d
+    - alt+tab
+  blocked_shell_patterns:
+    - "format "
+    - "del /f"
+    - "rd /s"
+    - "shutdown /s"
+    - "shutdown /r"
+    - "reg delete"
+    - "bcdedit"
+    - "diskpart"
+    - "cipher /w"
+  allowed_dev_commands:
+    - git
+    - python
+    - pytest
+    - pip
+    - npm
+    - npx
+  log_file: logs/actions.log
+
+logging:
+  log_file: logs/caine.log
+  level: INFO
+
+overlay:
+  enabled: true
+  title: CAINE
+  geometry: 420x120+20+20
+  always_on_top: true
+
+awareness:
+  enabled: true
+  capture_screenshots: true
+  screenshots_dir: logs/screens
+
+world:
+  enabled: true
+  scan_interval_seconds: 2.0
+  snapshot_interval_seconds: 30.0
+  ocr_interval_seconds: 45.0
+  inactivity_seconds: 600
+  repeated_behavior_seconds: 900
+  remember_app_usage: true
+  detect_running_apps: true
+
+autonomy:
+  enabled: true
+  commentary_cooldown_seconds: 90.0
+  same_event_cooldown_seconds: 240.0
+  minimum_idle_check_seconds: 600.0
+  max_commentary_per_hour: 10
+
+interaction:
+  enabled: true
+  mouse_duration_seconds: 0.15
+  safe_screen_margin: 8
+  typing_interval_seconds: 0.01
+
+diagnostics:
+  report_file: logs/startup_report.json
+  errors_file: logs/errors.log
+
+service:
+  service_name: CAINE
+  display_name: CAINE Local AI Assistant
+  description: Servicio persistente de CAINE para supervision y reinicio automatico.
+  auto_start: true
+  restart_delay_seconds: 5
+
+minecraft:
+  enabled: true
+  confirm_before_actions: true
+
+desktop:
+  enabled: true
+  scan_interval_seconds: 1.2
+  ocr_every_n_scans: 3
+  diff_threshold: 0.025
+  auto_talk_screen_events: true
+  microphone_enabled: true
+  open_chat_terminal: true
+  overlay_always_on_top: false
+  terminal_always_on_top: false
+  tesseract_cmd: ""
+  avatar_dir: assets/caine
+  microphone_phrase_seconds: 5.0
+  voice_name_hint: Pablo
+  voice_rate: 185
+  sapi_rate: 1
+  sapi_pitch: -6
+  use_piper_voice: true
+  piper_model_path: assets/voices/piper/es_ES-davefx-medium.onnx
+  piper_config_path: assets/voices/piper/es_ES-davefx-medium.onnx.json
+  always_listen_microphone: true
+  presence_interval_seconds: 75.0
+  game_keywords:
+    - minecraft
+    - roblox
+    - genshin
+    - vrchat
+    - steam
+    - curseforge
+    - javaw

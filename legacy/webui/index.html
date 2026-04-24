@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAINE Web</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <aside class="hero-card">
+      <div class="hero-badge">CAINE ONLINE</div>
+      <img class="hero-avatar" src="/static/caine_pixel.png" alt="Caine">
+      <h1>Cabina web de CAINE</h1>
+      <p class="hero-copy">
+        Chatea con tu anfitrión digital desde la PC o desde el celular sin abrir la terminal.
+      </p>
+      <div class="hero-status" id="statusPill">Conectando al circo...</div>
+      <div class="hero-hints">
+        <div>Prueba: <code>abreme whatsapp</code></div>
+        <div>Prueba: <code>lista .</code></div>
+        <div>Prueba: <code>estoy por jugar minecraft, acompañame pero no seas pesado</code></div>
+      </div>
+    </aside>
+
+    <main class="chat-card">
+      <div class="chat-header">
+        <div>
+          <div class="chat-kicker">CAINE</div>
+          <h2>Escenario de conversación</h2>
+        </div>
+        <button id="clearBtn" class="ghost-btn" type="button">Limpiar</button>
+      </div>
+
+      <div id="messages" class="messages">
+        <div class="message caine">
+          <div class="bubble">
+            Soy CAINE, el sonriente desastre que mantiene en pie este circo digital. ¿Qué quieres mover en la tramoya?
+          </div>
+        </div>
+      </div>
+
+      <form id="chatForm" class="composer">
+        <textarea id="messageInput" rows="3" placeholder="Escribe algo para CAINE..."></textarea>
+        <div class="composer-actions">
+          <div class="composer-note">Enter para enviar, Shift+Enter para salto de línea.</div>
+          <button id="sendBtn" class="send-btn" type="submit">Enviar al escenario</button>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

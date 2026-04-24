@@ -1,0 +1,2 @@
+"""Paquete principal de CAINE."""
+
