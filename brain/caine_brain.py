@@ -1,4 +1,4 @@
-"""Integracion principal con Ollama."""
+"""Integracion principal con OpenJarvis (agentes) + fallback a API OpenAI-compatible."""
 
 from __future__ import annotations
 
@@ -12,7 +12,13 @@ from personality.loader import PersonalityLoader
 
 
 class CaineBrain:
-    """Wrapper estable para conversar con Ollama."""
+    """
+    Capa de decision de CAINE.
+
+    Intenta usar OpenJarvis (agentes avanzados + skills) como capa primaria.
+    Si OpenJarvis no esta disponible, hace fallback a la API OpenAI-compatible
+    directa (Google Gemini, OpenRouter, etc.).
+    """
 
     def __init__(
         self,
@@ -32,13 +38,57 @@ class CaineBrain:
         self.personality_loader = personality_loader
         self.conversation_memory = conversation_memory
         self.logger = logging.getLogger("caine.brain")
+        self._openjarvis_ready = False
+        self._init_openjarvis()
+
+    def _init_openjarvis(self) -> None:
+        """Try to initialize OpenJarvis. Degrades gracefully if unavailable."""
+        try:
+            from interaction.openjarvis_skills import init_openjarvis
+            personality_path = str(self.personality_loader.personality_file)
+            ok = init_openjarvis(
+                api_key=self.api_key,
+                personality_path=personality_path,
+                model="gemini-2.5-flash",
+                tools=["web_search", "think"],
+            )
+            self._openjarvis_ready = ok
+            if ok:
+                self.logger.info("OpenJarvis inicializado. CAINE usara agentes avanzados.")
+            else:
+                self.logger.info("OpenJarvis no disponible. Usando API directa.")
+        except Exception as exc:
+            self.logger.warning("OpenJarvis no pudo inicializarse: %s", exc)
+            self._openjarvis_ready = False
 
     def send_message(self, user_message: str, extra_context: str = "") -> str:
+        # Intentar OpenJarvis primero
+        if self._openjarvis_ready:
+            response = self._ask_openjarvis(user_message)
+            if response:
+                self.conversation_memory.add(role="user", content=user_message)
+                self.conversation_memory.add(role="assistant", content=response)
+                return response
+            self.logger.warning("OpenJarvis no respondio. Usando fallback API directo.")
+
+        # Fallback: API OpenAI-compatible directa
         messages = self._build_messages(user_message, extra_context=extra_context)
         assistant_message = self._chat_with_fallback(messages)
         self.conversation_memory.add(role="user", content=user_message)
         self.conversation_memory.add(role="assistant", content=assistant_message)
         return assistant_message
+
+    def _ask_openjarvis(self, user_message: str) -> str | None:
+        """Delegate to OpenJarvis and return CAINE-flavored response."""
+        try:
+            from interaction.openjarvis_skills import ask_jarvis
+            history = self.conversation_memory.get_messages()
+            raw = ask_jarvis(user_message, context_messages=history)
+            if raw and raw.strip():
+                return self._cleanup_message(raw)
+        except Exception as exc:
+            self.logger.warning("Error en OpenJarvis ask: %s", exc)
+        return None
 
     def connection_test(self) -> tuple[bool, str]:
         headers = {}

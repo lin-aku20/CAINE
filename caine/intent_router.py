@@ -121,6 +121,15 @@ class IntentRouter:
             if lowered.startswith(prefix):
                 return IntentResult("accion_sistema", "cortar_llamada", "Peticion natural de cortar una llamada.")
 
+        for prefix in ("investiga sobre ", "investiga ", "investigame ", "deep research ", "hace una investigacion sobre ", "quiero saber todo sobre "):
+            if lowered.startswith(prefix):
+                query = lowered[len(prefix):].strip(" ?!")
+                return IntentResult("openjarvis_research", query, "Investigacion profunda via OpenJarvis.")
+
+        for phrase in ("resumen de la manana", "resumen de la mañana", "morning digest", "que paso esta manana", "que paso esta mañana"):
+            if phrase in lowered:
+                return IntentResult("openjarvis_digest", phrase, "Morning digest via OpenJarvis.")
+
         for prefix in ("busca en internet ", "busca en google ", "busca en la web ", "busca ", "busca en web ", "abre web ", "abre la web ", "googlea ", "busqueda de ", "buscar "):
             if lowered.startswith(prefix):
                 normalized = "web " + lowered[len(prefix):].strip(" ?!")

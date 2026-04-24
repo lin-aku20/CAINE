@@ -1,10 +1,10 @@
 personality_file: personality/caine.txt
 
 ollama:
-  base_url: http://127.0.0.1:18789/v1
-  primary_model: openclaw
-  fallback_model: openclaw
-  api_key: ""
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  primary_model: gemini-2.5-flash
+  fallback_model: gemini-1.5-flash
+  api_key: AIzaSyBAHrepGGKwvQl8Vwi6HQr9iwwSDo-teWU
   timeout_seconds: 120
 
 memory:

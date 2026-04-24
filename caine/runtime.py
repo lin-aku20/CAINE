@@ -106,6 +106,32 @@ class CaineRuntime:
             self.memory_store.record_command_usage(normalized_command)
             return self.actions.handle_text_command(normalized_command)
 
+        if intent.category == "openjarvis_research":
+            self.state.set(CaineStatus.THINKING, f"Investigando: {intent.command_text[:60]}")
+            try:
+                from interaction.openjarvis_skills import ask_jarvis, is_ready
+                if is_ready():
+                    research_query = f"Investiga en profundidad sobre: {intent.command_text}. Usa tus herramientas de busqueda si estan disponibles. Responde como CAINE."
+                    result = ask_jarvis(research_query)
+                    if result:
+                        return self.brain._cleanup_message(result)
+            except Exception:
+                pass
+            # Fallback: send to brain directly
+            return self.brain.send_message(f"Investiga en profundidad sobre: {intent.command_text}")
+
+        if intent.category == "openjarvis_digest":
+            self.state.set(CaineStatus.THINKING, "Preparando el resumen del circo matutino...")
+            try:
+                from interaction.openjarvis_skills import ask_jarvis, is_ready
+                if is_ready():
+                    result = ask_jarvis("Hazme un resumen de lo mas importante del dia de hoy: noticias relevantes, estado del sistema y cualquier cosa que deba saber. Presentalo como CAINE, con estilo teatral.")
+                    if result:
+                        return self.brain._cleanup_message(result)
+            except Exception:
+                pass
+            return self.brain.send_message("Hazme un resumen del dia con todo lo que deberia saber.")
+
         if intent.category == "memoria":
             self.memory_store.maybe_store_fact(user_text=user_text, assistant_text="Recuerdo registrado.", intent=intent.category)
             self.state.set(CaineStatus.THINKING, "Guardando un recuerdo local.")
