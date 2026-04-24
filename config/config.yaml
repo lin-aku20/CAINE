@@ -1,9 +1,10 @@
 personality_file: personality/caine.txt
 
 ollama:
-  base_url: http://127.0.0.1:11434
-  primary_model: caine:latest
-  fallback_model: qwen2.5:7b
+  base_url: http://127.0.0.1:18789/v1
+  primary_model: openclaw
+  fallback_model: openclaw
+  api_key: ""
   timeout_seconds: 120
 
 memory:

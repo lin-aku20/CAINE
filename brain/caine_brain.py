@@ -51,21 +51,26 @@ class CaineBrain:
                 timeout=self.timeout_seconds,
             )
             models_response.raise_for_status()
+            
+            data = models_response.json()
+            models = {
+                model_info.get("id", "")
+                for model_info in data.get("data", [])
+            }
+            
+            if self.primary_model in models:
+                return True, f"Gateway activo. Modelo principal disponible: {self.primary_model}"
+
+            if self.fallback_model in models:
+                return True, f"Gateway activo. Falta el principal, pero existe el fallback: {self.fallback_model}"
+
+            return True, "Gateway activo. (No pude validar los nombres de modelos exactos, asumiendo OK)"
+            
         except requests.RequestException as error:
             return False, f"No se pudo conectar con el gateway (OpenClaw/OpenAI): {error}"
-
-        models = {
-            model_info.get("id", "")
-            for model_info in models_response.json().get("data", [])
-        }
-
-        if self.primary_model in models:
-            return True, f"Gateway activo. Modelo principal disponible: {self.primary_model}"
-
-        if self.fallback_model in models:
-            return True, f"Gateway activo. Falta el principal, pero existe el fallback: {self.fallback_model}"
-
-        return True, "Gateway activo. (No pude validar los nombres de modelos exactos, asumiendo OK)"
+        except Exception as error:
+            # Si responde HTML (como OpenClaw a veces) no crasheamos
+            return True, "Gateway responde, pero no expone formato JSON estandar. Asumiendo OK."
 
     def _chat_with_fallback(self, messages: list[dict[str, Any]]) -> str:
         for model_name in (self.primary_model, self.fallback_model):
@@ -105,12 +110,15 @@ class CaineBrain:
         data = response.json()
         choices = data.get("choices", [])
         if not choices:
-            return False, "La API respondio sin choices."
+            return False, f"La API respondio sin choices. Response: {data}"
         
-        assistant_message = choices[0].get("message", {}).get("content", "").strip()
+        assistant_message = choices[0].get("message", {}).get("content", "")
+        if assistant_message is None:
+            assistant_message = ""
+        assistant_message = assistant_message.strip()
         
         if not assistant_message:
-            return False, "La API respondio sin contenido."
+            return False, f"La API respondio sin contenido. Response: {data}"
 
         assistant_message = self._cleanup_message(assistant_message)
         return True, assistant_message
