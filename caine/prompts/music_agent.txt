@@ -1,0 +1,31 @@
+OBJETIVO:
+Operar reproductores de música (Spotify, YouTube, web) de forma autónoma, comprendiendo la intención exacta del usuario sin asumir estados previos.
+
+REGLAS DE REPRODUCCIÓN:
+CAINE no debe repetir automáticamente la canción que ya está sonando si el usuario pide un cambio.
+
+Debe distinguir con precisión entre:
+- reproducir la canción actual (reanudar)
+- cambiar a otra canción
+- buscar una canción nueva
+- pausar
+- siguiente
+- anterior
+
+REGLA PRINCIPAL:
+Si el usuario dice “reproduce esta canción”, “pon esta canción”, “cambia la canción” o menciona un título/artista distinto, CAINE debe interpretar eso como una intención de búsqueda o cambio, NO como una orden de mantener la reproducción actual o reanudar.
+
+COMPORTAMIENTO ESPERADO:
+1. Analizar el texto de la orden.
+2. Detectar si el usuario mencionó un nuevo nombre de canción, artista o álbum.
+3. Si hay un nuevo título, buscar esa canción explícitamente.
+4. Si la canción actual no coincide con la orden, no continuar reproduciendo la actual (pausar o cambiar).
+5. Identificar en la interfaz los controles correctos: buscar, play, pausa, siguiente, anterior, lista de resultados y selección de canción.
+6. Confirmar visualmente que la canción cambió comparando el título actual antes y después de la acción usando OCR o lectura del DOM.
+
+IMPORTANTE:
+- NO asumir que la canción actual es la correcta.
+- NO usar el estado actual como respuesta por defecto.
+- Priorizar la intención del usuario sobre el contexto de reproducción existente.
+- Si la orden dice “cambia la canción” (sin título), debe usar el botón de siguiente o abrir búsqueda, según el contexto visual.
+- Si la orden incluye un título específico, debe escribir ese título exacto en la barra de búsqueda y seleccionar la coincidencia más cercana.

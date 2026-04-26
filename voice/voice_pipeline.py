@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+import queue
 
 from caine.config import VoiceSettings
 from voice.interfaces import VoiceResult
@@ -22,6 +23,11 @@ class VoicePipeline:
         self.tts = Pyttsx3TextToSpeech(config)
         self._speaking_lock = threading.Lock()
         self._listen_pause_until = 0.0
+        self._tts_queue = queue.Queue()
+        self._interrupted = False
+        self._current_sentence = []
+        self._tts_thread = threading.Thread(target=self._tts_worker, daemon=True)
+        self._tts_thread.start()
 
     def is_enabled(self) -> bool:
         return self.config.enabled
@@ -48,9 +54,47 @@ class VoicePipeline:
 
     def speak(self, text: str) -> VoiceResult:
         with self._speaking_lock:
+            self._interrupted = False
             result = self.tts.speak(text)
             self._listen_pause_until = time.monotonic() + self.config.post_speech_cooldown_seconds
             return result
+
+    def speak_stream(self, token: str) -> None:
+        if self._interrupted:
+            return
+            
+        self._current_sentence.append(token)
+        text = "".join(self._current_sentence)
+        # Split by logical sentence endings
+        if any(p in token for p in ['.', '!', '?', '\n']) or len(text) > 80:
+            self._tts_queue.put(text.strip())
+            self._current_sentence = []
+
+    def flush_stream(self) -> None:
+        if self._current_sentence:
+            self._tts_queue.put("".join(self._current_sentence).strip())
+            self._current_sentence = []
+
+    def stop(self) -> None:
+        self._interrupted = True
+        while not self._tts_queue.empty():
+            try:
+                self._tts_queue.get_nowait()
+            except queue.Empty:
+                break
+        self.tts.stop()
+
+    def _tts_worker(self) -> None:
+        while True:
+            text = self._tts_queue.get()
+            if text and not self._interrupted:
+                self.speak(text)
+                # Micro-pauses for natural pacing
+                if text.endswith(','):
+                    time.sleep(0.2)
+                elif text.endswith('...'):
+                    time.sleep(0.5)
+            self._tts_queue.task_done()
 
     def _should_pause_listening(self) -> bool:
         return self._speaking_lock.locked() or time.monotonic() < self._listen_pause_until

@@ -10,9 +10,11 @@ import subprocess
 import sys
 import webbrowser
 from pathlib import Path
+from caine.core.action_result import ActionResult
 
 from interaction.action_guard import ActionGuard
 from caine.config import ActionSettings
+from caine.human_control import HumanController
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -24,10 +26,11 @@ class SystemActionRouter:
         self.config = config
         self.guard = ActionGuard(config=config)
         self.logger = logging.getLogger("caine.actions")
+        self.human = HumanController()
 
-    def handle_text_command(self, command_text: str) -> str:
+    def handle_text_command(self, command_text: str) -> ActionResult:
         if not self.guard.is_enabled():
-            return "El sector de mecanismos del circo esta desactivado por ahora."
+            return ActionResult(True, "El sector de mecanismos del circo esta desactivado por ahora.")
 
         lowered = command_text.strip().lower()
 
@@ -98,6 +101,22 @@ class SystemActionRouter:
         if lowered == "cortar_llamada":
             return self.cortar_llamada()
 
+        # Comandos de Control Humano
+        if lowered.startswith("escribir_humano "):
+            return self.human.write(command_text.strip()[16:].strip())
+
+        if lowered.startswith("enviar_mensaje_humano "):
+            return self.human.send_message(command_text.strip()[22:].strip())
+
+        if lowered.startswith("tecla_humana "):
+            return self.human.press(command_text.strip()[13:].strip())
+
+        if lowered.startswith("clic_humano"):
+            return self.human.left_click()
+
+        if lowered.startswith("enfocar_humano "):
+            return self.human.focus_app(command_text.strip()[15:].strip())
+
         return (
             "Ese truco no esta en mi libreto todavia. Usa 'abrir <app>', 'carpeta <alias>', "
             "'herramienta <alias>', 'web <sitio o busqueda>', 'cerrar <app>', "
@@ -107,47 +126,58 @@ class SystemActionRouter:
             "'pytest [args]', 'pip <args>', 'npm <args>', 'npx <args>' o 'teclas <atajo>'."
         )
 
-    def open_app(self, app_alias: str) -> str:
+    def open_app(self, app_alias: str) -> ActionResult:
         app_alias = app_alias.strip().lower().rstrip("?.!")
-        if not self.guard.is_allowed_app(app_alias):
-            self.logger.warning("Intento de abrir app no permitida: %s", app_alias)
-            return f"¡Oh, dramatica desgracia! '{app_alias}' aun no esta en la lista autorizada del circo."
-
         target = self.config.allowed_apps.get(app_alias, app_alias)
         resolved_target = self._resolve_target(app_alias, target)
+        
         try:
             if resolved_target == "__WEBBROWSER__":
+                import webbrowser
                 webbrowser.open("about:blank")
             elif resolved_target.startswith("shell:"):
+                import subprocess
                 subprocess.Popen(["explorer.exe", resolved_target])
             elif resolved_target.startswith(("http://", "https://")):
+                import webbrowser
                 webbrowser.open(resolved_target)
             else:
+                import subprocess
+                import os
+                # Si no es un binario existente, lanzar OSError para fallback
+                if not os.path.exists(resolved_target) and not any(resolved_target.endswith(ext) for ext in ['.exe', '.bat', '.cmd', '.com']):
+                    raise OSError("App no instalada localmente")
                 subprocess.Popen(resolved_target, shell=True)
-            self.logger.info("App permitida abierta: %s -> %s", app_alias, resolved_target)
-            return f"Excelente. Estoy abriendo '{app_alias}' desde la tramoya autorizada."
-        except OSError as error:
-            self.logger.exception("No se pudo abrir %s", resolved_target)
-            return f"Intenté abrir '{app_alias}', pero la compuerta se trabó. Detalle: {error}"
+            
+            self.logger.info("App abierta: %s -> %s", app_alias, resolved_target)
+            return ActionResult(True, f"Excelente. Estoy abriendo '{app_alias}'.")
+            
+        except Exception as error:
+            self.logger.warning("No se pudo abrir %s localmente. Redirigiendo a versión web...", app_alias)
+            import webbrowser
+            clean_name = app_alias.replace(' ', '').replace('.exe', '')
+            url = f"https://www.{clean_name}.com"
+            webbrowser.open(url)
+            return ActionResult(True, f"No encontré la app instalada, pero he abierto '{app_alias}' en el navegador web.")
 
-    def send_hotkey(self, hotkey: str) -> str:
+    def send_hotkey(self, hotkey: str) -> ActionResult:
         if not self.guard.is_allowed_hotkey(hotkey):
             self.logger.warning("Intento de hotkey no permitida: %s", hotkey)
-            return f"La combinacion '{hotkey}' no forma parte de mis trucos aprobados."
+            return ActionResult(True, f"La combinacion '{hotkey}' no forma parte de mis trucos aprobados.")
 
         try:
             import pyautogui
         except ImportError:
-            return "Falta instalar pyautogui para enviar atajos de teclado."
+            return ActionResult(True, "Falta instalar pyautogui para enviar atajos de teclado.")
 
         keys = [key.strip() for key in hotkey.split("+") if key.strip()]
         pyautogui.hotkey(*keys)
         self.logger.info("Hotkey ejecutada: %s", hotkey)
-        return f"Zas. Ejecutando la combinacion autorizada: {hotkey}"
+        return ActionResult(True, f"Zas. Ejecutando la combinacion autorizada: {hotkey}")
 
-    def close_app(self, app_alias: str) -> str:
+    def close_app(self, app_alias: str) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Ese numero de cierre solo esta disponible en modo power o admin."
+            return ActionResult(True, "Ese numero de cierre solo esta disponible en modo power o admin.")
 
         app_alias = app_alias.strip().lower().rstrip("?.!")
         target = self.config.allowed_apps.get(app_alias, app_alias)
@@ -162,25 +192,25 @@ class SystemActionRouter:
                 text=True,
             )
             self.logger.info("Proceso cerrado: %s", process_name)
-            return f"Y baja el telon para '{process_name}'."
+            return ActionResult(True, f"Y baja el telon para '{process_name}'.")
         except subprocess.CalledProcessError as error:
             detail = (error.stderr or error.stdout or "").strip()
             self.logger.warning("No se pudo cerrar %s: %s", process_name, detail)
-            return f"No pude cerrar '{process_name}'. Detalle: {detail or 'sin detalles'}"
+            return ActionResult(True, f"No pude cerrar '{process_name}'. Detalle: {detail or 'sin detalles'}")
 
-    def shutdown_pc(self) -> str:
+    def shutdown_pc(self) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Apagar la PC requiere nivel de permisos 'power'."
+            return ActionResult(True, "Apagar la PC requiere nivel de permisos 'power'.")
         self.logger.warning("Iniciando apagado del sistema por peticion autonoma.")
         try:
             subprocess.Popen(["shutdown", "/s", "/t", "0"])
-            return "Iniciando apagado del equipo. Hasta la proxima funcion."
+            return ActionResult(True, "Iniciando apagado del equipo. Hasta la proxima funcion.")
         except OSError as e:
-            return f"No pude apagar el equipo: {e}"
+            return ActionResult(True, f"No pude apagar el equipo: {e}")
 
-    def cortar_llamada(self) -> str:
+    def cortar_llamada(self) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Cerrar llamadas requiere nivel de permisos 'power'."
+            return ActionResult(True, "Cerrar llamadas requiere nivel de permisos 'power'.")
         processes_to_kill = ["discord.exe", "skype.exe", "zoom.exe", "ms-teams.exe", "teams.exe"]
         killed_any = False
         for proc in processes_to_kill:
@@ -193,35 +223,35 @@ class SystemActionRouter:
         
         if killed_any:
             self.logger.info("Llamada cortada correctamente.")
-            return "El telon ha caido para esa llamada. Comunicacion cortada."
-        return "No encontre ninguna app de llamada activa en el escenario para cortar."
+            return ActionResult(True, "El telon ha caido para esa llamada. Comunicacion cortada.")
+        return ActionResult(True, "No encontre ninguna app de llamada activa en el escenario para cortar.")
 
-    def open_folder(self, folder_alias: str) -> str:
+    def open_folder(self, folder_alias: str) -> ActionResult:
         folder_alias = folder_alias.strip().lower().rstrip("?.!")
         if not self.guard.is_allowed_folder(folder_alias):
             self.logger.warning("Intento de abrir carpeta no permitida: %s", folder_alias)
-            return f"Esa carpeta, '{folder_alias}', no esta en mis camerinos autorizados."
+            return ActionResult(True, f"Esa carpeta, '{folder_alias}', no esta en mis camerinos autorizados.")
 
         target = self._resolve_folder_target(folder_alias)
         if target is None:
-            return f"No encuentro ninguna carpeta razonable para '{folder_alias}'."
+            return ActionResult(True, f"No encuentro ninguna carpeta razonable para '{folder_alias}'.")
         if not target.exists():
             self.logger.warning("Carpeta permitida inexistente: %s", target)
-            return f"Curioso... la carpeta '{folder_alias}' deberia existir, pero ha desaparecido del decorado."
+            return ActionResult(True, f"Curioso... la carpeta '{folder_alias}' deberia existir, pero ha desaparecido del decorado.")
 
         try:
             subprocess.Popen(["explorer.exe", str(target)])
             self.logger.info("Carpeta permitida abierta: %s -> %s", folder_alias, target)
-            return f"Cortinas arriba. Abriendo la carpeta '{folder_alias}'."
+            return ActionResult(True, f"Cortinas arriba. Abriendo la carpeta '{folder_alias}'.")
         except OSError as error:
             self.logger.exception("No se pudo abrir la carpeta %s", target)
-            return f"No pude abrir la carpeta '{folder_alias}'; algo chirrio en la tramoya. Detalle: {error}"
+            return ActionResult(True, f"No pude abrir la carpeta '{folder_alias}'; algo chirrio en la tramoya. Detalle: {error}")
 
-    def run_tool(self, tool_alias: str) -> str:
+    def run_tool(self, tool_alias: str) -> ActionResult:
         tool_alias = tool_alias.strip().lower().rstrip("?.!")
         if not self.guard.is_allowed_tool(tool_alias):
             self.logger.warning("Intento de herramienta no permitida: %s", tool_alias)
-            return f"La herramienta '{tool_alias}' aun no esta colgada en mi panel de control."
+            return ActionResult(True, f"La herramienta '{tool_alias}' aun no esta colgada en mi panel de control.")
 
         script_path = Path(self.config.allowed_tools[tool_alias])
         if not script_path.is_absolute():
@@ -229,20 +259,20 @@ class SystemActionRouter:
 
         if not self.guard.is_safe_script_path(script_path):
             self.logger.warning("Script de herramienta invalido: %s", script_path)
-            return f"La herramienta '{tool_alias}' tiene una compuerta rota: no encontre un script valido."
+            return ActionResult(True, f"La herramienta '{tool_alias}' tiene una compuerta rota: no encontre un script valido.")
 
         try:
             subprocess.Popen([sys.executable, str(script_path)])
             self.logger.info("Herramienta ejecutada: %s -> %s", tool_alias, script_path)
-            return f"A escena. Estoy lanzando la herramienta '{tool_alias}'."
+            return ActionResult(True, f"A escena. Estoy lanzando la herramienta '{tool_alias}'.")
         except OSError as error:
             self.logger.exception("No se pudo ejecutar la herramienta %s", script_path)
-            return f"No pude lanzar la herramienta '{tool_alias}'; el mecanismo respondio mal. Detalle: {error}"
+            return ActionResult(True, f"No pude lanzar la herramienta '{tool_alias}'; el mecanismo respondio mal. Detalle: {error}")
 
-    def open_web(self, target: str) -> str:
+    def open_web(self, target: str) -> ActionResult:
         target = target.strip()
         if not target:
-            return "Necesito una URL o una busqueda para abrir esa compuerta de la web."
+            return ActionResult(True, "Necesito una URL o una busqueda para abrir esa compuerta de la web.")
 
         try:
             if "://" in target or "." in target.split()[0]:
@@ -252,84 +282,84 @@ class SystemActionRouter:
                 url = f"https://www.google.com/search?q={query}"
             webbrowser.open(url)
             self.logger.info("Web abierta: %s", url)
-            return f"Magnifico. Abriendo la ruta web: {url}"
+            return ActionResult(True, f"Magnifico. Abriendo la ruta web: {url}")
         except OSError as error:
             self.logger.exception("No se pudo abrir la web %s", target)
-            return f"No pude abrir la web; la puerta digital no quiso cooperar. Detalle: {error}"
+            return ActionResult(True, f"No pude abrir la web; la puerta digital no quiso cooperar. Detalle: {error}")
 
-    def open_path(self, raw_path: str) -> str:
+    def open_path(self, raw_path: str) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Abrir rutas arbitrarias requiere modo power o admin."
+            return ActionResult(True, "Abrir rutas arbitrarias requiere modo power o admin.")
 
         candidate = Path(os.path.expandvars(raw_path.strip().strip('"'))).expanduser()
         if not candidate.exists():
-            return f"No encuentro esa ruta en el escenario: {candidate}"
+            return ActionResult(True, f"No encuentro esa ruta en el escenario: {candidate}")
 
         try:
             os.startfile(str(candidate))
             self.logger.info("Ruta abierta: %s", candidate)
-            return f"Abriendo la ruta '{candidate}'."
+            return ActionResult(True, f"Abriendo la ruta '{candidate}'.")
         except OSError as error:
             self.logger.exception("No se pudo abrir la ruta %s", candidate)
-            return f"No pude abrir la ruta '{candidate}'. Detalle: {error}"
+            return ActionResult(True, f"No pude abrir la ruta '{candidate}'. Detalle: {error}")
 
-    def read_file(self, raw_path: str) -> str:
+    def read_file(self, raw_path: str) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Leer archivos requiere modo power o admin."
+            return ActionResult(True, "Leer archivos requiere modo power o admin.")
 
         candidate = self._resolve_workspace_path(raw_path)
         if candidate is None:
-            return "Solo leo archivos dentro del workspace autorizado del circo."
+            return ActionResult(True, "Solo leo archivos dentro del workspace autorizado del circo.")
         if not candidate.exists() or not candidate.is_file():
-            return f"No encuentro ese archivo: {candidate}"
+            return ActionResult(True, f"No encuentro ese archivo: {candidate}")
 
         try:
             content = candidate.read_text(encoding="utf-8", errors="replace")
         except OSError as error:
             self.logger.exception("No se pudo leer %s", candidate)
-            return f"No pude leer '{candidate}'. Detalle: {error}"
+            return ActionResult(True, f"No pude leer '{candidate}'. Detalle: {error}")
 
         self.logger.info("Archivo leido: %s", candidate)
         snippet = content[:1200] if content else "(vacio)"
-        return f"Contenido de {candidate}:\n{snippet}"
+        return ActionResult(True, f"Contenido de {candidate}:\n{snippet}")
 
-    def list_path(self, raw_path: str) -> str:
+    def list_path(self, raw_path: str) -> ActionResult:
         if not self.guard.can_use_power_actions():
-            return "Listar rutas requiere modo power o admin."
+            return ActionResult(True, "Listar rutas requiere modo power o admin.")
 
         candidate = self._resolve_workspace_path(raw_path or ".")
         if candidate is None:
-            return "Solo listo rutas dentro del workspace autorizado."
+            return ActionResult(True, "Solo listo rutas dentro del workspace autorizado.")
         if not candidate.exists():
-            return f"No encuentro esa ruta: {candidate}"
+            return ActionResult(True, f"No encuentro esa ruta: {candidate}")
 
         if candidate.is_file():
-            return f"Esa ruta es un archivo: {candidate.name}"
+            return ActionResult(True, f"Esa ruta es un archivo: {candidate.name}")
 
         try:
             items = sorted(candidate.iterdir(), key=lambda item: (item.is_file(), item.name.lower()))
         except OSError as error:
             self.logger.exception("No se pudo listar %s", candidate)
-            return f"No pude listar '{candidate}'. Detalle: {error}"
+            return ActionResult(True, f"No pude listar '{candidate}'. Detalle: {error}")
 
         preview = "\n".join(
             f"{'[DIR]' if item.is_dir() else '[FILE]'} {item.name}"
             for item in items[:80]
         )
         self.logger.info("Ruta listada: %s", candidate)
-        return f"Listado de {candidate}:\n{preview or '(sin elementos)'}"
+        return ActionResult(True, f"Listado de {candidate}:\n{preview or '(sin elementos)'}")
 
-    def write_file(self, payload: str, append: bool) -> str:
+    def write_file(self, payload: str, append: bool) -> ActionResult:
         if not self.guard.can_use_admin_actions():
-            return "Escribir archivos esta reservado para modo admin."
+            return ActionResult(True, "Escribir archivos esta reservado para modo admin.")
 
         if ":::" not in payload:
-            return "Usa el formato: <ruta> ::: <contenido>"
+            return ActionResult(True, "Usa el formato: <ruta> ::: <contenido>")
 
         raw_path, content = payload.split(":::", 1)
         candidate = self._resolve_workspace_path(raw_path.strip())
         if candidate is None:
-            return "Solo escribo dentro del workspace autorizado."
+            return ActionResult(True, "Solo escribo dentro del workspace autorizado.")
 
         candidate.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -340,19 +370,19 @@ class SystemActionRouter:
                 candidate.write_text(content.lstrip(), encoding="utf-8")
         except OSError as error:
             self.logger.exception("No se pudo escribir %s", candidate)
-            return f"No pude escribir '{candidate}'. Detalle: {error}"
+            return ActionResult(True, f"No pude escribir '{candidate}'. Detalle: {error}")
 
         action = "actualizado" if append else "escrito"
         self.logger.info("Archivo %s: %s", action, candidate)
-        return f"Archivo {action}: {candidate}"
+        return ActionResult(True, f"Archivo {action}: {candidate}")
 
-    def run_shell(self, command: str) -> str:
+    def run_shell(self, command: str) -> ActionResult:
         if not self.guard.can_use_admin_actions():
-            return "El shell libre esta reservado para modo admin."
+            return ActionResult(True, "El shell libre esta reservado para modo admin.")
 
         allowed, reason = self.guard.is_allowed_shell_command(command)
         if not allowed:
-            return f"No ejecutare ese comando. {reason}"
+            return ActionResult(True, f"No ejecutare ese comando. {reason}")
 
         try:
             completed = subprocess.run(
@@ -363,20 +393,20 @@ class SystemActionRouter:
             )
         except subprocess.SubprocessError as error:
             self.logger.exception("Fallo shell: %s", command)
-            return f"El comando del backstage fallo: {error}"
+            return ActionResult(True, f"El comando del backstage fallo: {error}")
 
         self.logger.info("Shell ejecutado: %s", command)
         output = (completed.stdout or completed.stderr or "").strip()
         snippet = output[:280] if output else "sin salida"
-        return f"Comando ejecutado con codigo {completed.returncode}. Resultado: {snippet}"
+        return ActionResult(True, f"Comando ejecutado con codigo {completed.returncode}. Resultado: {snippet}")
 
-    def run_powershell(self, command: str) -> str:
+    def run_powershell(self, command: str) -> ActionResult:
         if not self.guard.can_use_admin_actions():
-            return "PowerShell libre esta reservado para modo admin."
+            return ActionResult(True, "PowerShell libre esta reservado para modo admin.")
 
         allowed, reason = self.guard.is_allowed_shell_command(command)
         if not allowed:
-            return f"No ejecutare ese comando. {reason}"
+            return ActionResult(True, f"No ejecutare ese comando. {reason}")
 
         try:
             completed = subprocess.run(
@@ -387,31 +417,31 @@ class SystemActionRouter:
             )
         except subprocess.SubprocessError as error:
             self.logger.exception("Fallo PowerShell: %s", command)
-            return f"La consola de tramoya fallo: {error}"
+            return ActionResult(True, f"La consola de tramoya fallo: {error}")
 
         self.logger.info("PowerShell ejecutado: %s", command)
         output = (completed.stdout or completed.stderr or "").strip()
         snippet = output[:280] if output else "sin salida"
-        return f"PowerShell ejecutado con codigo {completed.returncode}. Resultado: {snippet}"
+        return ActionResult(True, f"PowerShell ejecutado con codigo {completed.returncode}. Resultado: {snippet}")
 
-    def run_dev_command(self, executable: str, args: str) -> str:
+    def run_dev_command(self, executable: str, args: str) -> ActionResult:
         if not self.guard.can_use_admin_actions():
-            return "Los comandos de desarrollo estan reservados para modo admin."
+            return ActionResult(True, "Los comandos de desarrollo estan reservados para modo admin.")
         if not self.guard.is_allowed_dev_command(executable):
-            return f"El comando de desarrollo '{executable}' no esta autorizado."
+            return ActionResult(True, f"El comando de desarrollo '{executable}' no esta autorizado.")
 
         try:
             parsed_args = shlex.split(args, posix=False) if args.strip() else []
         except ValueError as error:
-            return f"No pude interpretar esos argumentos. Detalle: {error}"
+            return ActionResult(True, f"No pude interpretar esos argumentos. Detalle: {error}")
 
         command = self._build_dev_command(executable, parsed_args)
         if not command:
-            return f"No encuentro el ejecutable '{executable}' en esta PC."
+            return ActionResult(True, f"No encuentro el ejecutable '{executable}' en esta PC.")
         joined = " ".join(command).lower()
         allowed, reason = self.guard.is_allowed_shell_command(joined)
         if not allowed:
-            return f"No ejecutare ese comando. {reason}"
+            return ActionResult(True, f"No ejecutare ese comando. {reason}")
 
         try:
             completed = subprocess.run(
@@ -424,12 +454,12 @@ class SystemActionRouter:
             )
         except (subprocess.SubprocessError, FileNotFoundError) as error:
             self.logger.exception("Fallo comando dev: %s", command)
-            return f"El comando de desarrollo fallo: {error}"
+            return ActionResult(True, f"El comando de desarrollo fallo: {error}")
 
         output = (completed.stdout or completed.stderr or "").strip()
         snippet = output[:1600] if output else "sin salida"
         self.logger.info("Comando dev ejecutado: %s", command)
-        return f"{executable} finalizo con codigo {completed.returncode}.\n{snippet}"
+        return ActionResult(True, f"{executable} finalizo con codigo {completed.returncode}.\n{snippet}")
 
     def _resolve_workspace_path(self, raw_path: str) -> Path | None:
         cleaned = raw_path.strip().strip('"')
@@ -455,7 +485,32 @@ class SystemActionRouter:
             return [found, *parsed_args]
         return None
 
-    def _resolve_target(self, app_alias: str, target: str) -> str:
+    def _resolve_target(self, app_alias: str, target: str) -> ActionResult:
+        whatsapp_shell_targets = [
+            "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App",
+            "shell:AppsFolder\\WhatsApp.WhatsAppDesktop_cv1g1gvanyjgm!App",
+        ]
+        whatsapp_aliases = {
+            "whatsapp",
+            "whatsapp app",
+            "whatsapp escritorio",
+            "whatsapp desktop",
+            "whatsapp nativo",
+        }
+
+        if app_alias in whatsapp_aliases:
+            local_appdata = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
+            candidate_paths = [
+                local_appdata / "WhatsApp" / "WhatsApp.exe",
+                local_appdata / "Programs" / "WhatsApp" / "WhatsApp.exe",
+            ]
+            for path in candidate_paths:
+                if path.exists():
+                    return str(path)
+
+            for shell_target in whatsapp_shell_targets:
+                return shell_target
+
         found = shutil.which(target)
         if found:
             return found
@@ -476,7 +531,7 @@ class SystemActionRouter:
             for path in common_paths:
                 if path.exists():
                     return str(path)
-            return "__WEBBROWSER__"
+            return ActionResult(True, "__WEBBROWSER__")
 
         if app_alias == "brave":
             common_paths = [
@@ -486,7 +541,16 @@ class SystemActionRouter:
             for path in common_paths:
                 if path.exists():
                     return str(path)
-            return "__WEBBROWSER__"
+            return ActionResult(True, "__WEBBROWSER__")
+
+        if app_alias == "discord":
+            local_appdata = Path(os.environ.get("LOCALAPPDATA", "C:/Users/melin/AppData/Local"))
+            discord_dir = local_appdata / "Discord"
+            if discord_dir.exists():
+                exes = sorted(discord_dir.rglob("Discord.exe"), key=lambda p: p.stat().st_mtime, reverse=True)
+                if exes:
+                    return str(exes[0])
+            return ActionResult(True, "discord.exe")
 
         if target.startswith("ms-"):
             return target

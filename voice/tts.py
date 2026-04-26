@@ -32,3 +32,10 @@ class Pyttsx3TextToSpeech:
         self.engine.say(text)
         self.engine.runAndWait()
         return VoiceResult(True, "Audio reproducido.")
+
+    def stop(self) -> None:
+        if self.engine is not None:
+            try:
+                self.engine.stop()
+            except Exception:
+                pass

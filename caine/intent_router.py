@@ -135,6 +135,30 @@ class IntentRouter:
                 normalized = "web " + lowered[len(prefix):].strip(" ?!")
                 return IntentResult("accion_sistema", normalized, "Peticion natural de busqueda web.")
 
+        for prefix in ("escribe ", "tipea ", "escribeme "):
+            if lowered.startswith(prefix):
+                normalized = "escribir_humano " + lowered[len(prefix):].strip(" ?!")
+                return IntentResult("accion_sistema", normalized, "Peticion natural de control humano (escribir).")
+
+        for prefix in ("manda mensaje ", "envia mensaje "):
+            if lowered.startswith(prefix):
+                normalized = "enviar_mensaje_humano " + lowered[len(prefix):].strip(" ?!")
+                return IntentResult("accion_sistema", normalized, "Peticion natural de control humano (enviar mensaje).")
+
+        for prefix in ("presiona ", "tecla "):
+            if lowered.startswith(prefix):
+                normalized = "tecla_humana " + lowered[len(prefix):].strip(" ?!")
+                return IntentResult("accion_sistema", normalized, "Peticion natural de control humano (tecla).")
+
+        for prefix in ("haz clic", "clic ", "click ", "haz click"):
+            if lowered.startswith(prefix):
+                return IntentResult("accion_sistema", "clic_humano", "Peticion natural de control humano (clic).")
+
+        for prefix in ("enfoca ", "trae al frente ", "enfocar ", "pon en primer plano "):
+            if lowered.startswith(prefix):
+                normalized = "enfocar_humano " + lowered[len(prefix):].strip(" ?!")
+                return IntentResult("accion_sistema", normalized, "Peticion natural de control humano (enfocar).")
+
         if lowered.startswith(
             (
                 "abrir ",

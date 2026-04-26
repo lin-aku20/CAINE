@@ -53,7 +53,8 @@ class CaineWindowsService(win32serviceutil.ServiceFramework):
 
     def main(self) -> None:
         python_executable = sys.executable
-        command = [python_executable, str(ROOT_DIR / "main.py"), "--resident", "--headless"]
+        # Correcto: caine/main.py (no main.py en raiz, que no existe)
+        command = [python_executable, str(ROOT_DIR / "caine" / "main.py"), "--headless"]
 
         while self.running:
             self.process = subprocess.Popen(command, cwd=str(ROOT_DIR))

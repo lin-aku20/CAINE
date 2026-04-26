@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any, Generator
 import logging
 import threading
 import time
@@ -11,6 +12,8 @@ from brain.caine_brain import CaineBrain
 from caine.config import CaineConfig
 from caine.diagnostics import DiagnosticsManager
 from caine.intent_router import IntentRouter
+from caine.intent_parser import IntentParser
+from caine.action_router import ActionRouter
 from caine.overlay import CaineOverlay
 from caine.screen_awareness import ScreenAwareness
 from caine.state import CaineStatus, StateController
@@ -40,6 +43,7 @@ class CaineRuntime:
         self.memory_store = memory_store
         self.voice = voice
         self.intent_router = IntentRouter()
+        self.intent_parser = IntentParser()
         self.state = StateController()
         self.awareness = ScreenAwareness(
             screenshots_dir=config.awareness.screenshots_dir,
@@ -55,10 +59,16 @@ class CaineRuntime:
         self.app_launcher = AppLauncher(self.actions, self.memory_store)
         self.keyboard = KeyboardController(config.actions, config.interaction)
         self.mouse = MouseController(config.actions, config.interaction)
+        self.action_router = ActionRouter(self.actions, self.actions.human)
         self.diagnostics = DiagnosticsManager(config.diagnostics.report_file)
         self.logger = logging.getLogger("caine.runtime")
+        
+        # Conectar el ejecutor de herramientas nativas del LLM al action_router
+        self.brain.tool_executor = self._execute_tool_call
+        
         self.stop_event = threading.Event()
         self.pending_task_text: str | None = None
+        self._presence_thread = None
 
     def start_background_features(self, interactive_session: bool = True) -> None:
         if interactive_session and self.config.overlay.enabled:
@@ -70,7 +80,62 @@ class CaineRuntime:
         detail = "; ".join(f"{item.name}:{'ok' if item.ok else 'warn'}" for item in diagnostics)
         self.state.set(CaineStatus.SLEEP, f"Chequeo inicial completado. {detail}")
 
-    def handle_text(self, user_text: str) -> str:
+        # Iniciar Presence Commentary Engine
+        self._presence_thread = threading.Thread(target=self._presence_loop, daemon=True)
+        self._presence_thread.start()
+
+    def _execute_tool_call(self, accion: str, destino: str) -> str:
+        """Callback invocado por CaineBrain cuando el modelo decide usar una herramienta nativa."""
+        self.logger.info("Ejecutando herramienta LLM nativa: %s -> %s", accion, destino)
+        self.state.set(CaineStatus.ACTING, f"Ejecutando (LLM): {accion}")
+        
+        # Mapear la acción JSON al formato del intent_parser/action_router
+        action_map = {
+            "llamar": "start_call",
+            "terminar_llamada": "end_call",
+            "enviar_mensaje": "send_message",
+            "abrir_app": "open_app",
+            "reproducir": "media_play",
+            "pausar": "media_pause",
+            "volumen_subir": "volume_up",
+            "volumen_bajar": "volume_down",
+            "volumen_silenciar": "volume_mute",
+            "buscar_youtube": "youtube_search",
+        }
+        
+        mapped_action = action_map.get(accion, accion)
+        
+        # Construir el intent simulado
+        intent = {
+            "action": mapped_action,
+            "target": destino,
+            "app": "discord" if accion in ["llamar", "terminar_llamada", "enviar_mensaje"] else "",
+            "content": "",
+            "tool_call": "control_sistema"
+        }
+        
+        # Ejecutar usando el router de acciones existente
+        try:
+            result = self.action_router.handle(intent)
+            # Registrar el estado real (CONFIRMED vs fallido) en el log
+            last = getattr(self.action_router, '_last_action_log', None)
+            if last:
+                self.logger.info("[ACTION_RESULT] %s", last)
+            return str(result) if result else "Acción completada silenciosamente."
+        except Exception as e:
+            self.logger.error("Error ejecutando tool call nativo: %s", e)
+            return f"Error ejecutando la acción: {e}"
+
+    def handle_text(self, user_text: str) -> Any:
+        # 1. Intentar el nuevo sistema JARVIS (Parser -> Router)
+        parsed_intent = self.intent_parser.parse_intent(user_text)
+        if parsed_intent:
+            self.state.set(CaineStatus.ACTING, f"Ejecutando macro: {parsed_intent['action']}")
+            result = self.action_router.handle(parsed_intent)
+            self.memory_store.maybe_store_fact(user_text=user_text, assistant_text=result, intent="macro_accion")
+            return result
+
+        # 2. Flujo clásico de comandos y conversación
         screen_context = self.awareness.get_active_context(include_screenshot=False)
         intent = self.intent_router.classify(user_text, active_app=screen_context.process_name)
 
@@ -139,9 +204,7 @@ class CaineRuntime:
 
         extra_context = self._build_extra_context(screen_context.summary(), user_text)
         self.state.set(CaineStatus.THINKING, f"Procesando {intent.category}.")
-        reply = self.brain.send_message(user_text, extra_context=extra_context)
-        self.memory_store.maybe_store_fact(user_text=user_text, assistant_text=reply, intent=intent.category)
-        return reply
+        return self.brain.send_message_stream(user_text, extra_context=extra_context)
 
     def run_voice_loop(self) -> None:
         if not self.voice.is_enabled():
@@ -162,21 +225,49 @@ class CaineRuntime:
 
             heard = self.voice.listen_for_command(self.stop_event)
             if not heard.ok or not heard.text.strip():
-                # En modo continuo, no queremos inundar el log si no hay voz clara
                 if not self.config.desktop.always_listen_microphone:
                     self.logger.debug("No se escucho comando claro.")
                 continue
 
+            # Interrupción Humana
+            self.voice.stop()
+            self.state.set("LISTENING", "Usuario interrumpió.")
+
+            # Reacción Rápida (Reflex)
+            quick_reaction = self.brain.quick_reaction()
+            self.state.set("SPEAKING", quick_reaction)
+            self.voice.speak(quick_reaction)
+
             # Procesar el comando escuchado
             reply = self.handle_text(heard.text)
-            self.state.set(CaineStatus.SPEAKING, reply[:80])
-            self.voice.speak(reply)
+            
+            # Si es string (macro, app_launcher, interno)
+            if isinstance(reply, str):
+                self.state.set("SPEAKING", reply[:80])
+                self.voice.speak(reply)
+            else:
+                # Si es generador (LLM Streaming)
+                self.state.set("SPEAKING", "Respondiendo...")
+                for token in reply:
+                    self.voice.speak_stream(token)
+                self.voice.flush_stream()
             
             if not self.config.desktop.always_listen_microphone:
-                self.state.set(CaineStatus.WAITING_FOR_USER, "Listo para el siguiente acto.")
+                self.state.set("WAIT_FOR_HUMAN", "Listo para el siguiente acto.")
             else:
-                # Pequeña pausa para no escucharse a si mismo si el cancelamiento de eco falla
                 time.sleep(0.5)
+
+    def _presence_loop(self) -> None:
+        """Presence Commentary Engine"""
+        while not self.stop_event.is_set():
+            time.sleep(120)
+            if not self.voice._speaking_lock.locked() and not self.stop_event.is_set():
+                screen_context = self.awareness.get_active_context(include_screenshot=False)
+                if "Code" in screen_context.process_name or "Discord" in screen_context.process_name:
+                    try:
+                        self.voice.speak("Sigo aquí. Avisame si me necesitas.")
+                    except Exception:
+                        pass
 
     def shutdown(self) -> None:
         self.stop_event.set()
@@ -217,7 +308,7 @@ class CaineRuntime:
 
     def _looks_like_web_request(self, text: str) -> bool:
         lowered = text.lower()
-        return any(token in lowered for token in ("web", "pagina", "página", "landing"))
+        return any(token in lowered for token in ("web", "pagina", "pÃ¡gina", "landing"))
 
     def _preview_web_task(self, user_text: str) -> str:
         topic = user_text.strip().rstrip(".!?")
@@ -226,3 +317,4 @@ class CaineRuntime:
             f"Puedo montarte una web simple dentro del proyecto. "
             f"Si quieres que la ejecute ahora mismo, dime 'hazlo'. Pedido pendiente: {topic}"
         )
+

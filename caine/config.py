@@ -16,10 +16,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 @dataclass(slots=True)
 class OllamaSettings:
-    base_url: str = "https://openrouter.ai/api/v1"
-    primary_model: str = "google/gemini-2.0-flash-lite-preview-02-05:free"
-    fallback_model: str = "meta-llama/llama-3-8b-instruct:free"
-    api_key: str = ""
+    base_url: str = "http://localhost:11434/v1"
+    primary_model: str = "llama3:latest"
+    fallback_model: str = "llama3:latest"
+    api_key: str = "ollama"
     timeout_seconds: int = 120
 
 
@@ -161,6 +161,7 @@ class WorldSettings:
 
 @dataclass(slots=True)
 class AutonomySettings:
+    second_mouse: bool = False
     enabled: bool = True
     commentary_cooldown_seconds: float = 90.0
     same_event_cooldown_seconds: float = 240.0

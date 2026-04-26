@@ -1,0 +1,46 @@
+Analiza la captura de pantalla o interfaz completa y detecta todos los elementos interactivos visibles.
+
+Tu objetivo no es solo encontrar botones, sino comprender qué hace cada uno según su contexto visual.
+
+Debes identificar y diferenciar con precisión botones como:
+- llamada
+- videollamada
+- mensaje
+- seguir
+- audio
+- y cualquier otro botón similar
+
+Para clasificar cada elemento, analiza:
+- el texto visible
+- el icono
+- el color y estilo
+- la posición en la pantalla
+- los elementos cercanos
+- el contexto general de la interfaz
+
+Reglas importantes:
+- No clasifiques un elemento solo porque “parece un botón”.
+- Determina su función real.
+- Si un icono o texto es ambiguo, usa el entorno visual para decidir.
+- Distingue especialmente entre botones parecidos como llamada, videollamada, mensaje, audio y seguir.
+- Si no estás completamente seguro, indícalo con nivel de confianza.
+
+Devuelve el resultado en este formato:
+
+1. Nombre visible del elemento
+2. Tipo de acción detectada
+3. Motivo de la clasificación
+4. Ubicación aproximada en la pantalla
+5. Nivel de confianza (alto, medio o bajo)
+
+Ejemplo de categorías esperadas:
+- llamada
+- videollamada
+- mensaje
+- seguir
+- audio
+- perfil
+- más opciones
+- otro
+
+Prioriza la interpretación semántica del botón, no solo su forma visual.

@@ -1,10 +1,10 @@
 personality_file: personality/caine.txt
 
 ollama:
-  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
-  primary_model: gemini-2.5-flash
-  fallback_model: gemini-1.5-flash
-  api_key: AIzaSyBAHrepGGKwvQl8Vwi6HQr9iwwSDo-teWU
+  base_url: http://localhost:11434/v1
+  primary_model: llama3:latest
+  fallback_model: llama3:latest
+  api_key: ollama
   timeout_seconds: 120
 
 memory:
@@ -52,7 +52,7 @@ actions:
     recortes: SnippingTool.exe
     settings: "ms-settings:"
     configuracion: "ms-settings:"
-    whatsapp: https://web.whatsapp.com
+    whatsapp: "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
     "whatsapp web": https://web.whatsapp.com
     "whatsapp app": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"
     "whatsapp escritorio": "shell:AppsFolder\\5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App"

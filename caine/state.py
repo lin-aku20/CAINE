@@ -9,14 +9,24 @@ from typing import Callable
 
 
 class CaineStatus(StrEnum):
-    SLEEP = "sleep"
-    LISTENING = "listening"
-    THINKING = "thinking"
-    SPEAKING = "speaking"
-    ACTING = "acting"
-    OBSERVING = "observing"
-    EXCITED = "excited"
-    WAITING_FOR_USER = "waiting_for_user"
+    # Ciclo de vida del sistema
+    BOOT = "boot"                    # Inicializando subsistemas
+    IDLE = "idle"                    # En espera pasiva (sin wake word aún)
+    SLEEP = "sleep"                  # Dormido por inactividad o comando
+    # Ciclo conversacional
+    INITIATE = "initiate"            # CAINE inicia contacto (autónomo)
+    WAIT_FOR_HUMAN = "wait_for_human"  # Esperando input humano real
+    PROCESS_INPUT = "process_input"  # Procesando el input recibido
+    RESPOND = "respond"              # Generando y emitiendo respuesta
+    # Estados operativos
+    LISTENING = "listening"          # Escuchando micrófono activamente
+    THINKING = "thinking"            # Consultando modelo/memoria
+    SPEAKING = "speaking"            # TTS en curso
+    ACTING = "acting"                # Ejecutando acción del sistema
+    OBSERVING = "observing"          # Observando pantalla/contexto
+    EXCITED = "excited"              # Estado de alta activación
+    # Deprecated alias (backward compat)
+    WAITING_FOR_USER = "wait_for_human"
 
 
 @dataclass(slots=True)
