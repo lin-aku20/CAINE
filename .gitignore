@@ -30,7 +30,7 @@ caine_start.log
 .DS_Store
 Thumbs.db
 
-# Debug & Temp
-screenshots/
-debug_last_scan.png
-*.png
+# Debug and temporary screenshots
+debug_*.png
+*_debug.png
+desktop_screenshot.png
